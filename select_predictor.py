@@ -103,7 +103,7 @@ predictor_list = [
 
 
 if __name__ == '__main__':
-    '''  
+      
     for rfc in predictor_list[0:3]:
         rfc_name = get_predictor_name(rfc)
         path_save_files = os.path.join('base_estimators', rfc_name)
@@ -154,7 +154,7 @@ if __name__ == '__main__':
             find_feature_importance(rfc, X, y, index, 'svm', path_save_files)
             make_simple_predictor(rfc, X, y, index, path_save_files)            
              
-    '''
+    
     plot_feature_importance('base_estimators/RandomForestClassifier')
     plot_feature_importance('base_estimators/ExtraTreesClassifier') 
     plot_feature_importance('base_estimators/Pipeline_SVC')     
