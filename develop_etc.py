@@ -14,7 +14,9 @@ from sklearn.feature_selection import RFECV
 from bayes_opt import BayesianOptimization
 from sklearn import ensemble
 from sklearn.cross_validation import KFold
+import os
 from utility import get_predictor_name
+from string import strip
 
 #avaiable scores
 
@@ -25,13 +27,12 @@ from utility import get_predictor_name
 # 'r2', 'recall', 'recall_macro', 'recall_micro',  'recall_weighted', 'roc_auc'
 
 
-path_save_files = 'optimized/etc/'
-
-def make_RFECV(scoring = '', rfc='', X='', y='', index=0):
-    rfc_name = str(rfc).split('(')[0]
+def make_RFECV(scoring = '', rfc='', X='', y='', index=0, path_save=''):
+    
+    rfc_name = get_predictor_name(rfc)
 
     rfecv = RFECV(estimator=rfc,
-              step=1,
+              step=100,
               cv=KFold(y.shape[0],
                        n_folds=5,
                        shuffle=True,
@@ -46,13 +47,16 @@ def make_RFECV(scoring = '', rfc='', X='', y='', index=0):
     temp = pd.DataFrame()
     temp['rfecv_score']=rfecv.grid_scores_
     temp['index']=range(1, len(rfecv.grid_scores_) + 1)
-    temp.to_csv(path_save_files+'rfecv_score_'+rfc_name+'_'+str(index)+'.txt')
-    open(path_save_files+'RFECV_'+scoring+'_'+rfc_name+'_'+str(index)+'.txt','w').write('\n'.join(sel_features))
+    temp.to_csv(os.path.join(path_save,'rfecv_score_'+rfc_name+'_'+str(index)+'.txt'))
+    
+    file_res_name = os.path.join(path_save, 'RFECV_'+scoring+'_'+rfc_name+'_'+str(index)+'.txt')
+    print file_res_name
+    open(file_res_name,'w').write('\n'.join(sel_features))
     
 
     
-def optimize(X='', y='', scoring = 'roc_auc', selected_features=[]):
-      
+def optimize(X='', y='', scoring = 'roc_auc', selected_features=[], path_save='', index=''):
+     
     X = X[selected_features]
     print y.shape
     print X.shape
@@ -88,13 +92,13 @@ def optimize(X='', y='', scoring = 'roc_auc', selected_features=[]):
                                                 'min_samples_split':(0.1, 0.5),
 
                                                 })    
-    xgbBO.maximize(init_points=20, n_iter=150)
+    xgbBO.maximize(init_points=10, n_iter=10)
 
     res = xgbBO.res['max']['max_params']
     print res
 
 
-    rfc =  ensemble.ExtraTreesClassifier(n_estimators=500,#n_estimators=int(res['n_estimators']),
+    rfc =  ensemble.ExtraTreesClassifier(n_estimators=10,#n_estimators=int(res['n_estimators']),
                                  n_jobs=8,
                                  class_weight = 'balanced',
                                  min_samples_split= round(res['min_samples_split'],1),
@@ -104,8 +108,8 @@ def optimize(X='', y='', scoring = 'roc_auc', selected_features=[]):
                                  )
 
     
-                  
-    scores_res = open(pat_save_files+'scores_res_ExtraTreesClassifier_'+scoring+'_opt.txt','w')
+    file_res_name = os.path.join(path_save,'scores_res_ExtraTreesClassifier_'+scoring+'_'+str(index)+'_opt.txt')            
+    scores_res = open(file_res_name, 'w')
     for score in ['adjusted_rand_score','accuracy','f1','f1_weighted','precision_weighted','recall_weighted','roc_auc']:
         cv_result =  cross_val_score(rfc, X[selected_features], y, scoring=score, cv=5)
         print score, np.mean(cv_result)
@@ -113,34 +117,21 @@ def optimize(X='', y='', scoring = 'roc_auc', selected_features=[]):
     
     scores_res.close()
     rfc.fit(X,y)
-    joblib.dump(rfc, 'ExtraTreesClassifier_optimized_'+scoring+'.pkl') 
+    joblib.dump(rfc, os.path.join(path_save,'ExtraTreesClassifier_optimized_'+scoring+'_'+str(index)+'.pkl')) 
 
  
            
 #http://sebastianraschka.com/Articles/2014_ensemble_classifier.html        
 #http://stackoverflow.com/questions/21506128/best-way-to-combine-probabilistic-classifiers-in-scikit-learn  
-rfc_list = [
-            #tree.DecisionTreeClassifier(),
-            #tree.ExtraTreeClassifier(),
-            #ensemble.AdaBoostClassifier(n_estimators=500),
-            
-            #ensemble.GradientBoostingClassifier(n_estimators=500),
-            ensemble.RandomForestClassifier(n_estimators=500),
-            #linear_model.LogisticRegression(random_state=1),
-            #naive_bayes.GaussianNB()
-            ]
-    
-    
-    
 
+    
 if __name__ == '__main__':
     
-
-    
-    
+    path_save = os.path.join('optimized','etc')
+    os.makedirs(path_save)
     
     for index in np.arange(1,11,1):
-        print index
+        index=1
         start_df = 'predictor_dataset/'+'in_data_'+str(index)+'.csv'
         start_df = pd.DataFrame.from_csv(start_df,index_col=[0,1])
         #print start_df.head()
@@ -148,15 +139,17 @@ if __name__ == '__main__':
         X = start_df.iloc[:,0:-1]
         #print X.head()
         y = start_df['class']
-        rfc = ensemble.ExtraTreesClassifier(n_estimators=50)
-        make_RFECV(scoring = 'f1_weighted', rfc=rfc, X=X, y=y, index=index)
-    
-     
-    start_df = 'predictor_dataset/'+'in_data_'+str(1)+'.csv'
-    start_df = pd.DataFrame.from_csv(start_df,index_col=[0,1]) 
-    rfc = ensemble.ExtraTreesClassifier(n_estimators=10)
-    X = start_df.iloc[:,0:-1]
-    y = start_df['class']
-    optimize(X=X, y=y, scoring = 'roc_auc', selected_features=X.columns.values[0:10])                   
+        rfc = ensemble.ExtraTreesClassifier(n_estimators=10)
+        
+        rfc_name = get_predictor_name(rfc)
+        scoring = 'f1_weighted'
+        
+        make_RFECV(scoring = scoring, rfc=rfc, X=X, y=y, index=index, path_save=path_save)
+        selected_features = os.path.join(path_save,'RFECV_'+scoring+'_'+rfc_name+'_'+str(index)+'.txt')
+        selected_features = [strip(n) for n in open(selected_features).readlines()]
+        print selected_features[0:10]
+        
+        optimize(X=X, y=y, scoring = 'roc_auc', selected_features=selected_features, index=index, path_save=path_save)
+        break                   
                     
     
